@@ -1,0 +1,5 @@
+-e git+https://github.com/mahi7000/DVS.git@b181e140e4a3cdd2b32ce255eba47e0a70cefcf1#egg=dvs&subdirectory=cli
+setuptools==80.9.0
+termcolor==3.1.0
+watchdog==6.0.0
+websockets==15.0.1

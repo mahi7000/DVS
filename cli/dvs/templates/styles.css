@@ -1,0 +1,155 @@
+:root {
+  --bg: #0d1117;
+  --card-bg: #161b22;
+  --text: #c9d1d9;
+  --accent: #58a6ff;
+  --safe: #3fb950;
+  --danger: #f85149;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+header {
+  padding: 1rem 2rem;
+  background: var(--card-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+header h1 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.status {
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  background: var(--danger);
+  color: white;
+  font-weight: 600;
+}
+
+.status.ok {
+  background: var(--safe);
+}
+
+main {
+  padding: 2rem;
+  max-width: 1000px;
+  margin: auto;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.vuln-section {
+  margin-bottom: 1rem;
+}
+
+.vuln-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+  transition: transform 0.15s ease;
+}
+
+.vuln-card:hover {
+  transform: translateY(-2px);
+}
+
+.vuln-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.vuln-type {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.vuln-severity {
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+
+.severity-high {
+  background: var(--danger);
+  color: white;
+}
+
+.severity-medium {
+  background: #d29922;
+  color: white;
+}
+
+.severity-low {
+  background: var(--safe);
+  color: white;
+}
+
+.vuln-detail {
+  font-size: 0.9rem;
+  margin-bottom: 0.2rem;
+}
+
+.safe {
+  color: var(--safe);
+  font-weight: 600;
+}
+
+footer {
+  text-align: center;
+  font-size: 0.8rem;
+  padding: 1rem;
+  background: var(--card-bg);
+  margin-top: 2rem;
+  color: #8b949e;
+}
+
+/* Collapsible sections */
+.collapsible {
+  background: var(--card-bg);
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 0 0 0.5rem 0;
+  user-select: none;
+  font-size: 1rem;
+}
+
+.collapsible:hover {
+  background: #1f242d;
+}
+
+.collapsible::after {
+  content: '▼';
+  float: right;
+  transition: transform 0.2s ease;
+}
+
+.collapsible.active::after {
+  transform: rotate(-90deg);
+}
+
+.collapsible-content {
+  display: none;
+  overflow: hidden;
+}
+
+.collapsible-content.open {
+  display: block;
+}

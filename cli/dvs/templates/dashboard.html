@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DVS Dashboard</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap">
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🛡 DVS Security Dashboard</h1>
+    <span class="status" id="status">Disconnected</span>
+  </header>
+
+  <main>
+    <section>
+      <h2>Scan Results</h2>
+      <div id="results">
+        <p>No scan results yet. Run <code>dvs scan</code> in your terminal.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Developer Vulnerability Scanner — v1.0</p>
+  </footer>
+
+  <script>
+    const MAX_LEN = 4000;
+
+    function safeText(value) {
+      if (value === null || value === undefined) return "";
+      const str = String(value);
+      return str.length > MAX_LEN ? str.slice(0, MAX_LEN) + "…" : str;
+    }
+
+    function safePlain(value) {
+      return safeText(DOMPurify.sanitize(String(value ?? ""), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] }));
+    }
+
+    function clearEl(el) {
+      while (el.firstChild) el.removeChild(el.firstChild);
+    }
+
+    const wsScheme = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${wsScheme}://${location.host}`);
+
+    const statusEl = document.getElementById("status");
+    const resultsEl = document.getElementById("results");
+
+    ws.onopen = () => {
+      statusEl.textContent = "Connected";
+      statusEl.classList.add("ok");
+    };
+
+    ws.onclose = () => {
+      statusEl.textContent = "Disconnected";
+      statusEl.classList.remove("ok");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        if (typeof event.data !== "string" || event.data.length > 2_000_000) return;
+
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === "reload") {
+          location.reload();
+          return;
+        }
+
+        if (msg.type === "update" && typeof msg.results === "object" && msg.results !== null) {
+          renderResults(msg.results);
+        }
+      } catch (err) {
+        console.error("Failed to parse WS message", err);
+      }
+    };
+
+    function renderResults(results) {
+      clearEl(resultsEl);
+
+      for (const [type, vulns] of Object.entries(results)) {
+        const section = document.createElement("div");
+        section.className = "vuln-section";
+
+        const h3 = document.createElement("h3");
+        h3.className = "collapsible";
+        h3.textContent = `${safeText(type.toUpperCase())} (${vulns.length})`;
+        h3.addEventListener("click", () => {
+          h3.classList.toggle("active");
+          contentEl.classList.toggle("open");
+        });
+
+        section.appendChild(h3);
+
+        const contentEl = document.createElement("div");
+        contentEl.className = "collapsible-content";
+
+        if (!Array.isArray(vulns) || vulns.length === 0) {
+          const p = document.createElement("p");
+          p.className = "safe";
+          p.textContent = "No vulnerabilities found ✅";
+          contentEl.appendChild(p);
+        } else {
+          vulns.forEach(v => {
+            const card = document.createElement("div");
+            card.className = "vuln-card";
+
+            const header = document.createElement("div");
+            header.className = "vuln-header";
+
+            const typeEl = document.createElement("div");
+            typeEl.className = "vuln-type";
+            typeEl.textContent = safeText(v.pattern);
+
+            const severityEl = document.createElement("div");
+            severityEl.className = "vuln-severity severity-" + (v.severity || "low").toLowerCase();
+            severityEl.textContent = safeText(v.severity);
+
+            header.appendChild(typeEl);
+            header.appendChild(severityEl);
+            card.appendChild(header);
+
+            const details = [
+              ["File", v.file],
+              ["Line", v.line],
+              ["Recommendation", v.recommendation],
+              ["Confidence", v.confidence],
+              ["Snippet", v.snippet],
+              ["Sanitized", v.sanitized]
+            ];
+
+            details.forEach(([label, val]) => {
+              const detail = document.createElement("div");
+              detail.className = "vuln-detail";
+              detail.innerHTML = `<strong>${label}:</strong> ${safeText(val)}`;
+              card.appendChild(detail);
+            });
+
+            contentEl.appendChild(card);
+          });
+        }
+
+        section.appendChild(contentEl);
+        resultsEl.appendChild(section);
+      }
+    }
+  </script>
+</body>
+</html>
