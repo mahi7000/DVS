@@ -1,6 +1,6 @@
 import re
 from typing import List, Tuple
-from ..utils.types import SourceFile, Vulnerability, SinkDefinition, Severity
+from ...utils.types import SourceFile, Vulnerability, SinkDefinition, Severity
 
 ContextType = str  # "html", "js", "url", "attr", "css"
 
