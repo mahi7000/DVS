@@ -57,3 +57,16 @@ class ScanResult:
             "storedXSS": [v.__dict__ for v in self.stored_xss],
             "domXSS": [v.__dict__ for v in self.dom_xss]
         }
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Dictionary-like get method for compatibility"""
+        attr_map = {
+            'reflectiveXSS': 'reflective_xss',
+            'storedXSS': 'stored_xss', 
+            'domXSS': 'dom_xss'
+        }
+        
+        actual_attr = attr_map.get(key)
+        if actual_attr and hasattr(self, actual_attr):
+            return getattr(self, actual_attr)
+        return default

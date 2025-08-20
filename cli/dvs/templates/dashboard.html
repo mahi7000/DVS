@@ -44,8 +44,10 @@
       while (el.firstChild) el.removeChild(el.firstChild);
     }
 
+    const wsPort = location.port ? Number(location.port) + 1 : 5714;
+    const wsHost = `${location.hostname}:${wsPort}`;
     const wsScheme = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${wsScheme}://${location.host}`);
+    const ws = new WebSocket(`${wsScheme}://${wsHost}`);
 
     const statusEl = document.getElementById("status");
     const resultsEl = document.getElementById("results");

@@ -13,8 +13,8 @@ from termcolor import colored
 import webbrowser
 import json
 
-from .utils.loadProjectFiles import load_project_files  # async version
-
+from .utils.loadProjectFiles import load_project_files
+from .scanners.codeScanner import run_code_scan
 # -----------------------------
 # HTTP handler
 # -----------------------------
@@ -51,7 +51,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 # -----------------------------
 # WebSocket + scan
 # -----------------------------
-async def websocket_handler(websocket, path):
+async def websocket_handler(websocket):
     await send_scan_results(websocket)
 
 async def send_scan_results(websocket=None):
@@ -61,8 +61,8 @@ async def send_scan_results(websocket=None):
     # Async load files
     source_files = await load_project_files(cwd)
 
-    # Placeholder scan results
-    scan_results = await run_code_scan(source_files)
+    # Run scan
+    scan_results = run_code_scan(source_files)
 
     results = {
         'reflective': scan_results.get('reflectiveXSS', []),
@@ -70,17 +70,23 @@ async def send_scan_results(websocket=None):
         'dom': scan_results.get('domXSS', [])
     }
 
-    if websocket:
-        await websocket.send(json.dumps({'type': 'update', 'results': results}))
+    if websocket is not None:  # 👈 only send if websocket given
+        await websocket.send(json.dumps(
+            {'type': 'update', 'results': results},
+            default=str  # convert Enums/objects safely
+        ))
+
     return results
 
-async def run_code_scan(source_files):
-    """Dummy scan implementation"""
-    return {
-        'reflectiveXSS': [],
-        'storedXSS': [],
-        'domXSS': []
-    }
+
+
+# async def run_code_scan(source_files):
+#     """Dummy scan implementation"""
+#     return {
+#         'reflectiveXSS': [],
+#         'storedXSS': [],
+#         'domXSS': []
+#     }
 
 # -----------------------------
 # Utilities
@@ -109,7 +115,8 @@ async def start_dashboard(port=None):
     http_thread.start()
 
     # WebSocket server
-    start_server = websockets.serve(websocket_handler, "localhost", actual_port + 1)
+    ws_port = actual_port + 1
+    start_server = websockets.serve(websocket_handler, "localhost", ws_port)
     ws_server = await start_server
 
     # Run one-time scan immediately
@@ -117,6 +124,9 @@ async def start_dashboard(port=None):
 
     url = f"http://localhost:{actual_port}"
     print(colored(f"Dashboard available at: {url}", 'cyan'))
+    print(colored(f"WebSocket available at: ws://localhost:{ws_port}", "yellow"))
+
+    
     webbrowser.open(url)
 
     try:
