@@ -2,6 +2,7 @@ cli/dvs/__pycache__
 cli/venv
 
 cli/dvs/utils/__pycache__
+cli/dvs/scanners/__pycache__
 cli/dvs.egg-info
 
 client/node_modules
