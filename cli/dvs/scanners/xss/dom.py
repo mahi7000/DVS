@@ -1,135 +1,53 @@
 import re
-from typing import List, Tuple
+from typing import List
 from ...utils.types import SourceFile, Vulnerability, SinkDefinition, Severity
+from ...utils.commentRemover import remove_js_comments_preserve, remove_html_comments_preserve
+from ...utils.confidenceCalculator import calculate_confidence   # hypothetical util
 
 ContextType = str  # "html", "js", "url", "attr", "css"
 
 def detect_dom_xss(source_files: List[SourceFile]) -> List[Vulnerability]:
     vulns: List[Vulnerability] = []
 
-    # Enhanced source patterns
+    # Enhanced source patterns (where untrusted input may come from)
     dom_sources = [
         r"location\.hash",
-        r"location\.hash\.substring\(",
-        r"location\.hash\.slice\(",
-        r"decodeURIComponent\(location\.hash\)",
         r"location\.search",
         r"location\.pathname",
         r"location\.href",
         r"document\.URL",
-        r"document\.documentURI",
-        r"document\.baseURI",
         r"document\.referrer",
-        r"URLSearchParams",
         r"document\.cookie",
         r"window\.name",
         r"localStorage(?:\.getItem)?",
         r"sessionStorage(?:\.getItem)?",
         r"indexedDB",
-        r"document\.forms",
         r"\.value\b",
         r"\.files\b",
         r"\.getAttribute\(",
-        r"\.attributes\b",
-        r"navigator\.userAgent",
-        r"navigator\.language",
-        r"navigator\.plugins",
+        r"navigator\.(userAgent|language|plugins)",
         r"screen\.(width|height)",
         r"fetch\(",
         r"XMLHttpRequest",
-        r"xhr\.",
-        r"WebSocket\(",
         r"postMessage\(",
     ]
 
-    # More comprehensive sink patterns
+    # Dangerous sink patterns
     dom_sinks = [
-        # HTML injection
-        SinkDefinition(
-            pattern=r"document\.(write|writeln)\s*\([^)]*\)",
-            description="document.write/writeln",
-            context="html"
-        ),
-        SinkDefinition(
-            pattern=r"(?:document\.getElementById\([^)]+\)|[\w.]+)\.(innerHTML|outerHTML)\s*=",
-            description="element.innerHTML/outerHTML =",
-            context="html"
-        ),
-        SinkDefinition(
-            pattern=r"\w+\.insertAdjacentHTML\s*\([^)]*\)",
-            description="insertAdjacentHTML()",
-            context="html"
-        ),
-
-        # Script execution
-        SinkDefinition(
-            pattern=r"eval\s*\([^)]*\)",
-            description="eval()",
-            context="js"
-        ),
-        SinkDefinition(
-            pattern=r"new\s+Function\s*\([^)]*\)",
-            description="new Function()",
-            context="js"
-        ),
-        SinkDefinition(
-            pattern=r"(?:setTimeout|setInterval)\s*\(\s*['\"`]",
-            description="setTimeout/setInterval(string)",
-            context="js"
-        ),
-
-        # URL/navigation
-        SinkDefinition(
-            pattern=r"location\s*=\s*[^;]+",
-            description="location = ...",
-            context="url"
-        ),
-        SinkDefinition(
-            pattern=r"location\.(href|assign|replace)\s*\([^)]*\)|location\.href\s*=",
-            description="location.href/assign/replace",
-            context="url"
-        ),
-        SinkDefinition(
-            pattern=r"window\.open\s*\([^)]*\)",
-            description="window.open()",
-            context="url"
-        ),
-
-        # Attribute/event-handler assignments
-        SinkDefinition(
-            pattern=r"\w+\.setAttribute\s*\(\s*['\"][^'\"]+['\"]\s*,\s*(?:[^)]*?(?:\+|\$\{)[^)]*?|['\"][^'\"]*userInput[^'\"]*['\"])\)",
-            description="setAttribute() with dynamic value",
-            context="attr"
-        ),
-        SinkDefinition(
-            pattern=r"\w+\.on[a-z]+\s*=\s*(?:[^;]*?(?:\+|\$\{)|['\"][^'\"]*userInput[^'\"]*['\"])",
-            description="inline event handler with dynamic",
-            context="attr"
-        ),
-
-        # CSS injection
-        SinkDefinition(
-            pattern=r"(?:document\.getElementById\([^)]+\)|[\w.]+)\.style\.(innerHTML|cssText)\s*=\s*(?:[^;]*?(?:\+|\$\{)|['\"][^'\"]*userInput[^'\"]*['\"])",
-            description="style.innerHTML/cssText =",
-            context="css"
-        ),
-        SinkDefinition(
-            pattern=r"\w+\.style\.setProperty\s*\(\s*['\"][^'\"]+['\"]\s*,\s*(?:[^)]*?(?:\+|\$\{)|['\"][^'\"]*userInput[^'\"]*['\"])\)",
-            description="style.setProperty()",
-            context="css"
-        ),
-
-        # URL-bearing attributes
-        SinkDefinition(
-            pattern=r"\w+\.(src|href|srcdoc|data|code|formAction|action)\s*=\s*(?:[^;]*?(?:\+|\$\{)|['\"][^'\"]*userInput[^'\"]*['\"])",
-            description="URL-bearing attribute assignment",
-            context="url"
-        ),
-        SinkDefinition(
-            pattern=r"<(?:iframe|frame|embed|object)\s+[^>]*(?:src|srcdoc)\s*=\s*(?:['\"][^'\"]*userInput[^'\"]*['\"]|`[^`]*\$\{[^}]*\}[^`]*`)",
-            description="Embedded element src/srcdoc",
-            context="url"
-        ),
+        SinkDefinition(r"document\.(write|writeln)\s*\([^)]*\)", "document.write/writeln", "html"),
+        SinkDefinition(r"(?:document\.getElementById\([^)]+\)|[\w.]+)\.(innerHTML|outerHTML)\s*=", "element.innerHTML/outerHTML =", "html"),
+        SinkDefinition(r"\w+\.insertAdjacentHTML\s*\([^)]*\)", "insertAdjacentHTML()", "html"),
+        SinkDefinition(r"eval\s*\([^)]*\)", "eval()", "js"),
+        SinkDefinition(r"new\s+Function\s*\([^)]*\)", "new Function()", "js"),
+        SinkDefinition(r"(?:setTimeout|setInterval)\s*\(\s*['\"`]", "setTimeout/setInterval(string)", "js"),
+        SinkDefinition(r"location\s*=\s*[^;]+", "location = ...", "url"),
+        SinkDefinition(r"location\.(href|assign|replace)\s*=", "location.href/assign/replace", "url"),
+        SinkDefinition(r"window\.open\s*\([^)]*\)", "window.open()", "url"),
+        SinkDefinition(r"\w+\.setAttribute\s*\([^)]*\)", "setAttribute() with dynamic value", "attr"),
+        SinkDefinition(r"\w+\.on[a-z]+\s*=", "inline event handler assignment", "attr"),
+        SinkDefinition(r"\w+\.style\.(cssText|innerHTML)\s*=", "style.cssText assignment", "css"),
+        SinkDefinition(r"\w+\.style\.setProperty\s*\(", "style.setProperty()", "css"),
+        SinkDefinition(r"\w+\.(src|href|action)\s*=", "URL-bearing attribute assignment", "url"),
     ]
 
     def line_from_index(text: str, idx: int) -> int:
@@ -140,47 +58,47 @@ def detect_dom_xss(source_files: List[SourceFile]) -> List[Vulnerability]:
 
     for file in source_files:
         content = file.content
-        is_client_code = file.is_client_code
-        language = file.language
-        is_template = file.is_template
+        if not content:
+            continue
+
+        # Remove comments before scanning to avoid false positives
+        if file.language and file.language.lower() in ("js", "ts", "tsx", "jsx"):
+            content = remove_js_comments_preserve(content)
+        elif file.language and "html" in file.language.lower():
+            content = remove_html_comments_preserve(content)
 
         looks_client = (
-            is_client_code or
-            is_template or
-            (language and re.match(r'^(js|ts|tsx|jsx|html)$', language, re.IGNORECASE)) or
+            file.is_client_code or
+            file.is_template or
+            (file.language and re.match(r'^(js|ts|tsx|jsx|html)$', file.language, re.IGNORECASE)) or
             re.search(r'\.(html?|jsx?|tsx?)$', file.path, re.IGNORECASE)
         )
 
-        if not looks_client or not content:
+        if not looks_client:
             continue
 
-        # First scan for all sinks
+        # Scan all sinks
         for sink in dom_sinks:
             if not sink.compiled_re:
                 continue
-                
+
             for match in sink.compiled_re.finditer(content):
                 idx = match.start()
                 ctx = sink.context
 
-                # Use larger window for better source detection
+                # Expand slice around sink for source detection
                 slice_start = max(0, idx - 750)
                 slice_end = min(len(content), idx + len(match.group()) + 750)
                 code_slice = content[slice_start:slice_end]
 
-                # More lenient source detection
                 has_source = (
                     slice_has_any(code_slice, dom_sources) or
                     re.search(r'userInput|location\.hash', code_slice)
                 )
-
                 if not has_source:
                     continue
 
-                severity = Severity.HIGH
-                vuln_type = f"DOM-based {ctx.upper()} Injection"
-                recommendation = ""
-
+                # Severity & recommendations
                 if ctx == "html":
                     vuln_type = "DOM-based HTML Injection"
                     recommendation = "Use textContent instead of innerHTML/outerHTML or sanitize with DOMPurify"
@@ -192,7 +110,7 @@ def detect_dom_xss(source_files: List[SourceFile]) -> List[Vulnerability]:
                 elif ctx == "url":
                     vuln_type = "DOM-based URL Injection"
                     recommendation = "Validate all URLs and block javascript:/data: schemes"
-                    severity = Severity.CRITICAL if re.search(r'javascript:', match.group()) else Severity.HIGH
+                    severity = Severity.CRITICAL if "javascript:" in match.group().lower() else Severity.HIGH
                 elif ctx == "attr":
                     vuln_type = "DOM-based Attribute Injection"
                     recommendation = "Avoid setting attributes with dynamic user input"
@@ -201,6 +119,17 @@ def detect_dom_xss(source_files: List[SourceFile]) -> List[Vulnerability]:
                     vuln_type = "DOM-based CSS Injection"
                     recommendation = "Never inject user input into CSS properties"
                     severity = Severity.CRITICAL if re.search(r'expression\(|javascript:', match.group()) else Severity.HIGH
+                else:
+                    vuln_type = "DOM-based Injection"
+                    recommendation = "Sanitize/escape user input"
+                    severity = Severity.HIGH
+
+                # ✅ Confidence calculator
+                confidence = calculate_confidence(
+                    has_source=has_source,
+                    sanitized=False,
+                    context=ctx
+                )
 
                 vulns.append(Vulnerability(
                     type=vuln_type,
@@ -209,25 +138,11 @@ def detect_dom_xss(source_files: List[SourceFile]) -> List[Vulnerability]:
                     pattern=f"{sink.description}: {match.group().strip()}",
                     recommendation=recommendation,
                     severity=severity,
-                    confidence=0.95,
-                    snippet=f"{sink.description}: {match.group().strip()}",
+                    confidence=confidence,
+                    snippet=match.group().strip(),
                     sanitized=False
                 ))
 
-        # Special case for inline javascript: URLs
-        inline_js_urls = re.compile(r'(?:href|src|action)\s*=\s*["\']\s*javascript:[^"\']*["\']', re.IGNORECASE)
-        for match in inline_js_urls.finditer(content):
-            idx = match.start()
-            vulns.append(Vulnerability(
-                type="DOM-based URL Injection",
-                file=file.path,
-                line=line_from_index(content, idx),
-                pattern=match.group().strip(),
-                recommendation="Remove all javascript: URLs - use event handlers instead",
-                severity=Severity.CRITICAL,
-                confidence=1.0,
-                snippet=match.group().strip(),
-                sanitized=False
-            ))
+        
 
     return vulns
